@@ -16,8 +16,7 @@ class ApptainerSlurmQueueConf(SlurmQueueConf):
     """
 
     _target_: str = (
-        "hydra_plugins.hydra_apptainer_launcher.launcher"
-        ".ApptainerSlurmLauncher"
+        "hydra_plugins.hydra_apptainer_launcher.launcher.ApptainerSlurmLauncher"
     )
 
     # Shell command to use as the Python executable on compute nodes.

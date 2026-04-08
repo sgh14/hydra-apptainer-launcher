@@ -24,7 +24,9 @@ from hydra_plugins.hydra_submitit_launcher.submitit_launcher import (
 )
 from omegaconf import OmegaConf
 
-from .config import ApptainerSlurmQueueConf  # noqa: F401 — triggers ConfigStore registration
+from .config import (
+    ApptainerSlurmQueueConf,  # noqa: F401 — triggers ConfigStore registration
+)
 
 log = logging.getLogger(__name__)
 
@@ -61,7 +63,8 @@ class ApptainerSlurmLauncher(BaseSubmititLauncher):
             **{
                 f"{self._EXECUTOR}_{x}": y
                 for x, y in params.items()
-                if x in specific_init_keys and y is not None  # skip None: don't override submitit default
+                if x in specific_init_keys
+                and y is not None  # skip None: don't override submitit default
             }
         )
         # ---------------------------------------------------------------------
