@@ -65,6 +65,86 @@ Then run:
 python my_app.py -m hydra/launcher=slurm_apptainer_gpu param=1,2,3
 ```
 
+## Usage on clusters without a system Python
+
+Some HPC clusters have neither Python nor pip available on login or compute nodes
+— all software runs exclusively inside containers. This requires **two levels of
+Apptainer wrapping**:
+
+1. **Outer wrap** — the Hydra app itself (including submitit) runs inside a
+   container on the login node.
+2. **Inner wrap** — each SLURM task that submitit generates also runs inside a
+   container on the compute node, via `hydra.launcher.python`.
+
+```bash
+apptainer exec /path/to/image.sif \
+    my_app -m \
+    hydra/launcher=submitit_slurm_apptainer \
+    "hydra.launcher.python=apptainer exec --nv /path/to/image.sif python" \
+    hydra.launcher.partition=gpu \
+    hydra.launcher.gres="gpu:1" \
+    param=1,2,3
+```
+
+### Keeping the YAML cluster-agnostic
+
+Hardcoding the container path in a YAML file ties the config to one machine.
+A better pattern is to inject `hydra.launcher.python` dynamically from a shell
+script that resolves the path at runtime, leaving the YAML portable:
+
+```yaml
+# conf/hydra/launcher/slurm-apptainer-gpu.yaml
+defaults:
+  - slurm-native-gpu          # resource defaults (partition, mem, gres, …)
+  - submitit_slurm_apptainer  # launcher type
+
+# python is NOT set here — injected at call time by the dispatch script
+```
+
+```bash
+# dispatch.sh (simplified)
+CONTAINER_PATH="/path/to/containers/my-image-gpu.sif"
+
+apptainer exec "${CONTAINER_PATH}" \
+    my_app -m \
+    hydra/launcher=slurm-apptainer-gpu \
+    "hydra.launcher.python=apptainer exec --nv ${CONTAINER_PATH} python" \
+    param=1,2,3
+```
+
+The container path is resolved once in the shell script from cluster-local config
+(e.g. an `.env` file) rather than being hardcoded in a YAML that lives in the repo.
+
+### Composing resource defaults from a base config
+
+When you have both Apptainer and native SLURM variants, you can avoid duplicating
+resource settings by composing the Apptainer config from a native base:
+
+```yaml
+# conf/hydra/launcher/slurm-native-gpu.yaml  — resource defaults only
+defaults:
+  - submitit_slurm
+
+partition: gpu
+gres: "gpu:1"
+mem_gb: 32
+cpus_per_task: 8
+timeout_min: 240
+```
+
+```yaml
+# conf/hydra/launcher/slurm-apptainer-gpu.yaml  — inherits all resources above
+defaults:
+  - slurm-native-gpu          # all resource values come from here
+  - submitit_slurm_apptainer  # only the launcher type changes
+
+# python injected at runtime by the dispatch script
+```
+
+`slurm-apptainer-gpu` inherits every resource value from `slurm-native-gpu` and
+only overrides the launcher implementation. Resource tweaks (partition, memory,
+timeout) only need to be made in one place regardless of whether Apptainer is used.
+
 ## Compatibility
 
 | Package | Version |
